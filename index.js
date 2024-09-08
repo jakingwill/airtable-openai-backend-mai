@@ -10,7 +10,7 @@ const app = express();
 app.use(express.json());
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,  // Ensure this is set in your .env file
+  apiKey: process.env.OPENAI_API_KEY,
 });
 
 // Webhook URL
@@ -87,29 +87,13 @@ async function createText(
   }
 }
 
-// Function to process multiple questions in parallel
-async function processQuestionsInParallel(questions) {
-  const promises = questions.map((question) =>
-    createText(
-      question.prompt,
-      question.maxTokens,
-      question.model,
-      question.targetFieldId,
-      question.recordId,
-      question.temperature,
-      question.systemRole
-    )
-  );
-
-  // Process all requests in parallel
-  await Promise.all(promises);
-}
-
-// Set up the route for handling multiple requests
+// Route to handle single requests
 app.post('/generate', checkAPIKey, async (req, res) => {
   try {
-    const questions = req.body.questions; // Assuming multiple questions are passed as an array
-    await processQuestionsInParallel(questions); // Process all questions in parallel
+    const { prompt, max_tokens, model, targetField_id, record_id, system_role, temperature } = req.body;
+
+    // Call createText with the incoming data
+    await createText(prompt, max_tokens, model, targetField_id, record_id, temperature, system_role);
 
     res.json({ message: 'success' });
   } catch (error) {

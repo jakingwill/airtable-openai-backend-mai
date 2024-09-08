@@ -17,5 +17,8 @@
     "nodemon": "^3.1.4",
     "openai": "^4.0.0"
   },
-  "type": "module"
+  "type": "module",
+  "engines": {
+    "node": ">=16.x"
+  }
 }

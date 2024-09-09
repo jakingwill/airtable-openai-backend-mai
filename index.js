@@ -50,7 +50,7 @@ app.post('/generate', checkAPIKey, async (req, res) => {
     const result = await runWorker({
       prompt,
       maxTokens: max_tokens || 2000,
-      model: model || 'gpt-4',
+      model: model || 'gpt-4o',
       targetFieldId: targetField_id,
       recordId: record_id,
       systemRole: system_role,

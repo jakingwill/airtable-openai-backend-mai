@@ -7,7 +7,9 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-async function processQuestion() {
+const MAX_RETRIES = 3; // Define the maximum number of retries
+
+async function processQuestion(retries = 0) {
   try {
     const completion = await openai.chat.completions.create({
       model: workerData.model,
@@ -35,9 +37,16 @@ async function processQuestion() {
     parentPort.postMessage({ status: 'success', recordId: workerData.recordId });
   } catch (error) {
     console.error('Error in worker:', error.message);
-    parentPort.postMessage({ status: 'error', error: error.message });
+
+    if (retries < MAX_RETRIES) {
+      console.log(`Retrying... (${retries + 1}/${MAX_RETRIES})`);
+      await processQuestion(retries + 1);  // Retry the task
+    } else {
+      // If retries exceed limit, send error back to the parent thread
+      parentPort.postMessage({ status: 'error', error: error.message });
+    }
   }
 }
 
-// Execute the worker task
+// Execute the worker task with retries
 processQuestion();

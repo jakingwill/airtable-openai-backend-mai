@@ -13,13 +13,17 @@ async function processQuestion(retries = 0) {
   try {
     console.log('Processing question with workerData:', workerData);  // Log workerData
 
+    if (!workerData.prompt) {
+      throw new Error('Prompt is missing or undefined.');
+    }
+
     // Sending request to OpenAI
     console.log('Sending request to OpenAI API...');
     const completion = await openai.chat.completions.create({
       model: workerData.model,
       messages: [
-        { role: 'system', content: workerData.systemRole || 'You are a teacher providing a structured response.' },  // Ensure system role is defined
-        { role: 'user', content: workerData.prompt[1].content }  // Ensure the user content is passed correctly
+        { role: 'system', content: workerData.systemRole || 'You are a teacher providing a structured response.' },  
+        { role: 'user', content: workerData.prompt }  // Pass the correct prompt here
       ],
       max_tokens: workerData.maxTokens,
       temperature: workerData.temperature,
@@ -45,18 +49,17 @@ async function processQuestion(retries = 0) {
     console.log('OpenAI API Response:', completion);
 
     // Access structured output directly from the API response
-    const generatedMessage = completion.choices[0].message;  // Fix: use 'message' instead of 'data'
+    const generatedMessage = completion.choices[0].message;
+    const structuredResponse = JSON.parse(generatedMessage.content);  // Parse the JSON output
 
-    // Manually parse the message content for mark, breakdown, feedback
-    const structuredResponse = JSON.parse(generatedMessage.content);  // Parse the JSON output in the message content
     console.log('Generated structured message:', structuredResponse);
 
     const payload = {
       recordId: workerData.recordId || 'defaultRecordId',
       targetFieldId: workerData.targetFieldId || 'defaultField',
-      mark: structuredResponse.mark,  // Extract from the parsed message
-      feedback: structuredResponse.feedback,  // Extract from the parsed message
-      breakdown: structuredResponse.breakdown  // Extract from the parsed message
+      mark: structuredResponse.mark,
+      feedback: structuredResponse.feedback,
+      breakdown: structuredResponse.breakdown
     };
 
     console.log('Payload to be sent to webhook:', JSON.stringify(payload, null, 2));
@@ -79,3 +82,4 @@ async function processQuestion(retries = 0) {
 
 // Execute the worker task
 processQuestion();
+

@@ -47,9 +47,16 @@ app.post('/generate', checkAPIKey, async (req, res) => {
 
     const systemRole = req.body.system_role || 'You are a teacher who will provide a structured response.';
 
+    // Use req.body.prompt directly if that's the field name
+    const promptMessages = req.body.prompt;  // Use the correct field for prompt
+
+    if (!promptMessages) {
+      throw new Error('Prompt is missing or undefined.');
+    }
+
     // Call worker for the current request
     const result = await runWorker({
-      prompt: req.body.messages,
+      prompt: promptMessages,  // Pass the correct field here
       maxTokens: req.body.max_tokens || 2000,
       model: req.body.model || 'gpt-4o',
       targetFieldId: req.body.targetField_id || 'defaultField',

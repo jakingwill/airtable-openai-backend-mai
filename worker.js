@@ -11,42 +11,71 @@ const MAX_RETRIES = 3; // Define the maximum number of retries
 
 async function processQuestion(retries = 0) {
   try {
+    console.log('Processing question with workerData:', workerData);  // Log workerData
+
+    // Sending request to OpenAI
+    console.log('Sending request to OpenAI API...');
     const completion = await openai.chat.completions.create({
       model: workerData.model,
       messages: [
-        { role: 'system', content: workerData.systemRole },
-        { role: 'user', content: workerData.prompt },
+        { role: 'system', content: workerData.systemRole || 'You are a teacher providing a structured response.' },  // Ensure system role is defined
+        { role: 'user', content: workerData.prompt[1].content }  // Ensure the user content is passed correctly
       ],
       max_tokens: workerData.maxTokens,
       temperature: workerData.temperature,
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "marking_response",
+          strict: true,
+          schema: {
+            type: "object",
+            properties: {
+              mark: { type: "string" },
+              breakdown: { type: "string" },
+              feedback: { type: "string" }
+            },
+            required: ["mark", "breakdown", "feedback"],
+            additionalProperties: false
+          }
+        }
+      }
     });
 
-    const generatedMessage = completion.choices[0].message;
+    console.log('OpenAI API Response:', completion);
 
-    // Log the generated message before sending it to the webhook
-    console.log('Generated message:', generatedMessage);
+    // Access structured output directly from the API response
+    const generatedMessage = completion.choices[0].message;  // Fix: use 'message' instead of 'data'
 
-    // Send the response to the webhook
-    await axios.post(process.env.WEBHOOK_URL, {
-      generatedMessage,
-      recordId: workerData.recordId,
-      targetFieldId: workerData.targetFieldId,
-    });
+    // Manually parse the message content for mark, breakdown, feedback
+    const structuredResponse = JSON.parse(generatedMessage.content);  // Parse the JSON output in the message content
+    console.log('Generated structured message:', structuredResponse);
 
-    // Return success to parent thread
+    const payload = {
+      recordId: workerData.recordId || 'defaultRecordId',
+      targetFieldId: workerData.targetFieldId || 'defaultField',
+      mark: structuredResponse.mark,  // Extract from the parsed message
+      feedback: structuredResponse.feedback,  // Extract from the parsed message
+      breakdown: structuredResponse.breakdown  // Extract from the parsed message
+    };
+
+    console.log('Payload to be sent to webhook:', JSON.stringify(payload, null, 2));
+
+    await axios.post(process.env.WEBHOOK_URL, payload);
+
     parentPort.postMessage({ status: 'success', recordId: workerData.recordId });
+
   } catch (error) {
     console.error('Error in worker:', error.message);
 
     if (retries < MAX_RETRIES) {
       console.log(`Retrying... (${retries + 1}/${MAX_RETRIES})`);
-      await processQuestion(retries + 1);  // Retry the task
+      await processQuestion(retries + 1);
     } else {
-      // If retries exceed limit, send error back to the parent thread
       parentPort.postMessage({ status: 'error', error: error.message });
     }
   }
 }
 
-// Execute the worker task with retries
+// Execute the worker task
 processQuestion();

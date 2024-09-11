@@ -21,7 +21,7 @@ async function processQuestion() {
 
     const generatedMessage = completion.choices[0].message;
 
-    await axios.post(process.env.WEBHOOK_URL, {
+    await axios.post(process.env.WEBHOOK_URL_SINGLE, {
       generatedMessage,
       recordId: workerData.recordId,
       targetFieldId: workerData.targetFieldId,

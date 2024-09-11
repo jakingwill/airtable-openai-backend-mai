@@ -2,6 +2,7 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
+import OpenAI from 'openai';
 import { Worker } from 'worker_threads';
 import express from 'express';
 import axios from 'axios';
@@ -10,8 +11,10 @@ import axios from 'axios';
 const app = express();
 app.use(express.json());
 
-// Logging to confirm server is running
-console.log("Server starting...");
+// Create OpenAI instance
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
 // API key middleware for authentication
 function checkAPIKey(req, res, next) {
@@ -23,60 +26,63 @@ function checkAPIKey(req, res, next) {
 }
 
 // Worker function to run in a separate thread
-function runWorker(data) {
+function runWorker(workerFile, data) {
   return new Promise((resolve, reject) => {
-    console.log('Starting worker with data:', data);  // Log worker input
-
-    const worker = new Worker('./worker.js', { workerData: data });
-
+    const worker = new Worker(workerFile, { workerData: data });
     worker.on('message', resolve);
     worker.on('error', reject);
     worker.on('exit', (code) => {
       if (code !== 0) {
-        console.error(`Worker stopped with exit code ${code}`);  // Log worker exit code
         reject(new Error(`Worker stopped with exit code ${code}`));
       }
     });
   });
 }
 
-// Main API endpoint for generating responses
-app.post('/generate', checkAPIKey, async (req, res) => {
+// Single response generation endpoint
+app.post('/generate/single', checkAPIKey, async (req, res) => {
   try {
-    console.log('Received request to /generate:', req.body);  // Log the incoming request
+    const { prompt, max_tokens, model, targetField_id, record_id, system_role, temperature } = req.body;
 
-    const systemRole = req.body.system_role || 'You are a teacher who will provide a structured response.';
-
-    // Use req.body.prompt directly if that's the field name
-    const promptMessages = req.body.prompt;  // Use the correct field for prompt
-
-    if (!promptMessages) {
-      throw new Error('Prompt is missing or undefined.');
-    }
-
-    // Call worker for the current request
-    const result = await runWorker({
-      prompt: promptMessages,  // Pass the correct field here
-      maxTokens: req.body.max_tokens || 2000,
-      model: req.body.model || 'gpt-4o',
-      targetFieldId: req.body.targetField_id || 'defaultField',
-      recordId: req.body.record_id || 'defaultRecordId',
-      systemRole: systemRole,
-      temperature: req.body.temperature || 0.7,
+    // Call worker for generating single response
+    const result = await runWorker('./workerSingle.js', {
+      prompt,
+      maxTokens: max_tokens || 2000,
+      model: model || 'gpt-4o',
+      targetFieldId: targetField_id,
+      recordId: record_id,
+      systemRole: system_role,
+      temperature: temperature || 0.7,
     });
-
-    console.log('Worker result:', result);  // Log the result from the worker
 
     res.json({ message: 'success', result });
   } catch (error) {
-    console.error('Worker failed:', error);  // Log the error
+    console.error('Error:', error);
     res.status(500).json({ error: 'An error occurred while generating text.' });
   }
 });
 
-// Test route to confirm the server is running
-app.get('/test', (req, res) => {
-  res.json({ message: 'Server is running!' });
+// Multiple response generation endpoint (mark, feedback, justification)
+app.post('/generate/multiple', checkAPIKey, async (req, res) => {
+  try {
+    const { prompt, max_tokens, model, targetField_id, record_id, system_role, temperature } = req.body;
+
+    // Call worker for generating multiple responses
+    const result = await runWorker('./workerMultiple.js', {
+      prompt,
+      maxTokens: max_tokens || 2000,
+      model: model || 'gpt-4o',
+      targetFieldId: targetField_id,
+      recordId: record_id,
+      systemRole: system_role,
+      temperature: temperature || 0.7,
+    });
+
+    res.json({ message: 'success', result });
+  } catch (error) {
+    console.error('Error:', error);
+    res.status(500).json({ error: 'An error occurred while generating text.' });
+  }
 });
 
 // Start the server

@@ -56,7 +56,7 @@ async function processQuestion(retries = 0) {
       breakdown: structuredResponse.breakdown
     };
 
-    await axios.post(process.env.WEBHOOK_URL, payload);
+    await axios.post(process.env.WEBHOOK_URL_MULTIPLE, payload);
 
     parentPort.postMessage({ status: 'success', recordId: workerData.recordId });
 

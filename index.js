@@ -48,11 +48,11 @@ app.post('/generate/single', checkAPIKey, async (req, res) => {
     const result = await runWorker('./workerSingle.js', {
       prompt,
       maxTokens: max_tokens || 2000,
-      model: model || 'gpt-4o',
+      model: model || 'gpt-4o-2024-08-06',
       targetFieldId: targetField_id,
       recordId: record_id,
       systemRole: system_role,
-      temperature: temperature || 0.7,
+      temperature: temperature || 0.2,
     });
 
     res.json({ message: 'success', result });
@@ -71,11 +71,11 @@ app.post('/generate/multiple', checkAPIKey, async (req, res) => {
     const result = await runWorker('./workerMultiple.js', {
       prompt,
       maxTokens: max_tokens || 2000,
-      model: model || 'gpt-4o',
+      model: model || 'gpt-4o-2024-08-06',
       targetFieldId: targetField_id,
       recordId: record_id,
       systemRole: system_role,
-      temperature: temperature || 0.7,
+      temperature: temperature || 0.2,
     });
 
     res.json({ message: 'success', result });

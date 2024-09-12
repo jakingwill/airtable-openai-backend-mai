@@ -2,23 +2,21 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-import OpenAI from 'openai';  // Correct import for the current version of the library
+import OpenAI from 'openai';
 import { Worker } from 'worker_threads';
 import express from 'express';
 import axios from 'axios';
+
+// Initialize Express
+const app = express();
+app.use(express.json());
 
 // Create OpenAI instance
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// Initialize Express
-const app = express();
-app.use(express.json());
-
-const webhookURL = process.env.WEBHOOK_URL;
-
-// API key middleware
+// API key middleware for authentication
 function checkAPIKey(req, res, next) {
   const apiKey = req.headers['x-api-key'];
   if (!apiKey || apiKey !== process.env.APP_API_KEY) {
@@ -27,10 +25,10 @@ function checkAPIKey(req, res, next) {
   next();
 }
 
-// Function to run worker for parallel processing
-function runWorker(data) {
+// Worker function to run in a separate thread
+function runWorker(workerFile, data) {
   return new Promise((resolve, reject) => {
-    const worker = new Worker('./worker.js', { workerData: data });
+    const worker = new Worker(workerFile, { workerData: data });
     worker.on('message', resolve);
     worker.on('error', reject);
     worker.on('exit', (code) => {
@@ -41,13 +39,13 @@ function runWorker(data) {
   });
 }
 
-// Route to handle requests and spawn workers
-app.post('/generate', checkAPIKey, async (req, res) => {
+// Single response generation endpoint
+app.post('/generate/single', checkAPIKey, async (req, res) => {
   try {
     const { prompt, max_tokens, model, targetField_id, record_id, system_role, temperature } = req.body;
 
-    // Call worker for the current request
-    const result = await runWorker({
+    // Call worker for generating single response
+    const result = await runWorker('./workerSingle.js', {
       prompt,
       maxTokens: max_tokens || 2000,
       model: model || 'gpt-4o',
@@ -59,7 +57,30 @@ app.post('/generate', checkAPIKey, async (req, res) => {
 
     res.json({ message: 'success', result });
   } catch (error) {
-    console.error('Worker failed:', error);
+    console.error('Error:', error);
+    res.status(500).json({ error: 'An error occurred while generating text.' });
+  }
+});
+
+// Multiple response generation endpoint (mark, feedback, justification)
+app.post('/generate/multiple', checkAPIKey, async (req, res) => {
+  try {
+    const { prompt, max_tokens, model, targetField_id, record_id, system_role, temperature } = req.body;
+
+    // Call worker for generating multiple responses
+    const result = await runWorker('./workerMultiple.js', {
+      prompt,
+      maxTokens: max_tokens || 2000,
+      model: model || 'gpt-4o',
+      targetFieldId: targetField_id,
+      recordId: record_id,
+      systemRole: system_role,
+      temperature: temperature || 0.7,
+    });
+
+    res.json({ message: 'success', result });
+  } catch (error) {
+    console.error('Error:', error);
     res.status(500).json({ error: 'An error occurred while generating text.' });
   }
 });

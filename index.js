@@ -48,11 +48,11 @@ app.post('/generate/single', checkAPIKey, async (req, res) => {
     const result = await runWorker('./workerSingle.js', {
       prompt,
       maxTokens: max_tokens || 2000,
-      model: model || 'gpt-4o-2024-08-06',
+      model: model || 'gpt-4o',
       targetFieldId: targetField_id,
       recordId: record_id,
       systemRole: system_role,
-      temperature: temperature || 0.2,
+      temperature: temperature || 0.7,
     });
 
     res.json({ message: 'success', result });
@@ -71,7 +71,40 @@ app.post('/generate/multiple', checkAPIKey, async (req, res) => {
     const result = await runWorker('./workerMultiple.js', {
       prompt,
       maxTokens: max_tokens || 2000,
-      model: model || 'gpt-4o-2024-08-06',
+      model: model || 'gpt-4o',
+      targetFieldId: targetField_id,
+      recordId: record_id,
+      systemRole: system_role,
+      temperature: temperature || 0.1,
+    });
+
+    res.json({ message: 'success', result });
+  } catch (error) {
+    console.error('Error:', error);
+    res.status(500).json({ error: 'An error occurred while generating text.' });
+  }
+});
+
+// Combined essay marking guide and total marks response generation endpoint
+app.post('/generate/essaymg', checkAPIKey, async (req, res) => {
+  try {
+    const {
+      marking_guide_prompt,
+      total_marks_prompt,
+      max_tokens,
+      model,
+      record_id,
+      targetField_id,
+      system_role,
+      temperature,
+    } = req.body;
+
+    // Call worker for generating essay marking guide and total marks
+    const result = await runWorker('./workerEssayMG.js', {
+      markingGuidePrompt: marking_guide_prompt,
+      totalMarksPrompt: total_marks_prompt,
+      maxTokens: max_tokens || 2000,
+      model: model || 'gpt-4',
       targetFieldId: targetField_id,
       recordId: record_id,
       systemRole: system_role,
@@ -84,6 +117,7 @@ app.post('/generate/multiple', checkAPIKey, async (req, res) => {
     res.status(500).json({ error: 'An error occurred while generating text.' });
   }
 });
+
 
 // Start the server
 const port = process.env.PORT || 5000;

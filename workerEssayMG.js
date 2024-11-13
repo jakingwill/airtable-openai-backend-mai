@@ -1,4 +1,3 @@
-// workerEssayMG.js
 import { parentPort, workerData } from 'worker_threads';
 import axios from 'axios';
 import OpenAI from 'openai';
@@ -10,7 +9,6 @@ const openai = new OpenAI({
 
 async function processEssayMG() {
   try {
-    // Destructure workerData
     const {
       markingGuidePrompt,
       totalMarksPrompt,
@@ -22,7 +20,9 @@ async function processEssayMG() {
       targetFieldId,
     } = workerData;
 
-    // Call OpenAI API for marking guide
+    console.log('Starting OpenAI request for essay marking guide and total marks');
+
+    // Marking guide API call
     const markingGuideCompletion = await openai.chat.completions.create({
       model: model,
       messages: [
@@ -32,10 +32,10 @@ async function processEssayMG() {
       max_tokens: maxTokens,
       temperature: temperature,
     });
-
     const markingGuide = markingGuideCompletion.choices[0].message.content.trim();
+    console.log('Marking guide generated successfully');
 
-    // Call OpenAI API for total marks
+    // Total marks API call
     const totalMarksCompletion = await openai.chat.completions.create({
       model: model,
       messages: [
@@ -45,26 +45,34 @@ async function processEssayMG() {
       max_tokens: maxTokens,
       temperature: temperature,
     });
-
     const totalMarks = totalMarksCompletion.choices[0].message.content.trim();
+    console.log('Total marks generated successfully');
 
-    // Prepare the payload for the webhook or database update
+    // Payload with success message
     const payload = {
       recordId: recordId,
       targetFieldId: targetFieldId,
       markingGuide: markingGuide,
       totalMarks: totalMarks,
+      status_message: "Successfully processed by OpenAI",
     };
 
-    // Send the payload to your webhook or handle database update here
     await axios.post(process.env.WEBHOOK_URL_ESSAYMG, payload);
-
+    console.log('Sent successfully to Airtable via webhook');
     parentPort.postMessage({ status: 'success', recordId: recordId, data: payload });
   } catch (error) {
     console.error('Error in workerEssayMG:', error.message);
+
+    const errorPayload = {
+      recordId: workerData.recordId,
+      targetFieldId: workerData.targetFieldId,
+      status_message: `Error: ${error.message}`,
+    };
+
+    await axios.post(process.env.WEBHOOK_URL_ESSAYMG, errorPayload);
+    console.log('Error sent to Airtable via webhook');
     parentPort.postMessage({ status: 'error', error: error.message });
   }
 }
 
-// Execute the essay marking guide and total marks process
 processEssayMG();

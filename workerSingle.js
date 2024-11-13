@@ -7,30 +7,52 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-async function processQuestion() {
+async function processSingle() {
   try {
+    const { prompt, model, maxTokens, temperature, systemRole, recordId, targetFieldId } = workerData;
+
+    console.log('Starting OpenAI request for single response');
+
+    // Call OpenAI API for single response
     const completion = await openai.chat.completions.create({
-      model: workerData.model,
+      model: model,
       messages: [
-        { role: 'system', content: workerData.systemRole },
-        { role: 'user', content: workerData.prompt },
+        { role: 'system', content: systemRole },
+        { role: 'user', content: prompt },
       ],
-      max_tokens: workerData.maxTokens,
-      temperature: workerData.temperature,
+      max_tokens: maxTokens,
+      temperature: temperature,
     });
 
-    const generatedMessage = completion.choices[0].message;
+    const generatedMessage = completion.choices[0].message.content.trim();
+    console.log('Generated message successfully from OpenAI');
 
-    await axios.post(process.env.WEBHOOK_URL_SINGLE, {
-      generatedMessage,
+    // Prepare payload with success message
+    const payload = {
+      recordId: recordId,
+      targetFieldId: targetFieldId,
+      generatedMessage: generatedMessage,
+      status_message: "Successfully processed by OpenAI",
+    };
+
+    await axios.post(process.env.WEBHOOK_URL_SINGLE, payload);
+    console.log('Sent successfully to Airtable via webhook');
+    parentPort.postMessage({ status: 'success', recordId: recordId, data: payload });
+  } catch (error) {
+    console.error('Error in workerSingle:', error.message);
+
+    // Send error status to webhook
+    const errorPayload = {
       recordId: workerData.recordId,
       targetFieldId: workerData.targetFieldId,
-    });
+      status_message: `Error: ${error.message}`,
+    };
 
-    parentPort.postMessage({ status: 'success', recordId: workerData.recordId });
-  } catch (error) {
+    await axios.post(process.env.WEBHOOK_URL_SINGLE, errorPayload);
+    console.log('Error sent to Airtable via webhook');
     parentPort.postMessage({ status: 'error', error: error.message });
   }
 }
 
-processQuestion();
+// Execute the worker task
+processSingle();

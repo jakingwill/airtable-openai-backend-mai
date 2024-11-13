@@ -27,11 +27,11 @@ async function processSingle() {
     const generatedMessage = completion.choices[0].message.content.trim();
     console.log('Generated message successfully from OpenAI');
 
-    // Prepare payload with success message
+    // Prepare payload with original fields and added status_message
     const payload = {
+      generatedMessage: generatedMessage,
       recordId: recordId,
       targetFieldId: targetFieldId,
-      generatedMessage: generatedMessage,
       status_message: "Successfully processed by OpenAI",
     };
 

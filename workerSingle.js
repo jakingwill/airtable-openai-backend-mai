@@ -24,12 +24,15 @@ async function processSingle() {
       temperature: temperature,
     });
 
-    const generatedMessage = completion.choices[0].message.content.trim();
+    const generatedMessageContent = completion.choices[0].message.content.trim();
     console.log('Generated message successfully from OpenAI');
 
-    // Prepare payload with original fields and added status_message
+    // Prepare payload with original structure, including `role`, `content`, and `status_message`
     const payload = {
-      generatedMessage: generatedMessage,
+      generatedMessage: {
+        role: "assistant",
+        content: generatedMessageContent,
+      },
       recordId: recordId,
       targetFieldId: targetFieldId,
       status_message: "Successfully processed by OpenAI",
@@ -41,8 +44,12 @@ async function processSingle() {
   } catch (error) {
     console.error('Error in workerSingle:', error.message);
 
-    // Send error status to webhook
+    // Send error status to webhook with original structure and blank message content
     const errorPayload = {
+      generatedMessage: {
+        role: "assistant",
+        content: "", // Empty content if there's an error
+      },
       recordId: workerData.recordId,
       targetFieldId: workerData.targetFieldId,
       status_message: `Error: ${error.message}`,

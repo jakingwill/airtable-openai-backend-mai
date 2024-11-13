@@ -31,7 +31,7 @@ async function processMultiple(retries = 0) {
 
     console.log('Generated structured responses successfully from OpenAI');
 
-    // Prepare payload with success message
+    // Prepare payload with original fields and added status_message
     const payload = {
       recordId: recordId,
       targetFieldId: targetFieldId,

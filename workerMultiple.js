@@ -9,71 +9,67 @@ const openai = new OpenAI({
 
 const MAX_RETRIES = 3; // Define the maximum number of retries
 
-async function processMultiple(retries = 0) {
+async function processQuestion(retries = 0) {
   try {
-    const { prompt, model, maxTokens, temperature, systemRole, recordId, targetFieldId } = workerData;
+    console.log('Processing question with workerData:', workerData);
 
-    console.log('Starting OpenAI request for multiple responses');
-
-    // Send request to OpenAI
-    const completion = await openai.chat.completions.create({
-      model: model,
-      messages: [
-        { role: 'system', content: systemRole || 'You are a teacher providing a structured response.' },
-        { role: 'user', content: prompt }
-      ],
-      max_tokens: maxTokens,
-      temperature: temperature,
-    });
-
-    // Attempt to parse the response into the expected JSON structure
-    const generatedMessage = completion.choices[0].message.content.trim();
-    let structuredResponse = { mark: "", feedback: "", breakdown: "" }; // Default values
-
-    try {
-      structuredResponse = JSON.parse(generatedMessage);
-      console.log('Structured response:', structuredResponse); // Log structured response
-    } catch (parseError) {
-      console.error('JSON parsing error:', parseError.message);
-      structuredResponse.status_message = "Failed to parse OpenAI response as JSON"; // Error-specific message
+    if (!workerData.prompt) {
+      throw new Error('Prompt is missing or undefined.');
     }
 
-    // Ensure mark, feedback, and breakdown are present even if parsing fails
+    // Sending request to OpenAI
+    const completion = await openai.chat.completions.create({
+      model: workerData.model,
+      messages: [
+        { role: 'system', content: workerData.systemRole || 'You are a teacher providing a structured response.' },  
+        { role: 'user', content: workerData.prompt }
+      ],
+      max_tokens: workerData.maxTokens,
+      temperature: workerData.temperature,
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "marking_response",
+          strict: true,
+          schema: {
+            type: "object",
+            properties: {
+              mark: { type: "string" },
+              breakdown: { type: "string" },
+              feedback: { type: "string" }
+            },
+            required: ["mark", "breakdown", "feedback"],
+            additionalProperties: false
+          }
+        }
+      }
+    });
+
+    const generatedMessage = completion.choices[0].message;
+    const structuredResponse = JSON.parse(generatedMessage.content);
+
     const payload = {
-      recordId: recordId,
-      targetFieldId: targetFieldId,
-      mark: structuredResponse.mark || "",
-      feedback: structuredResponse.feedback || "",
-      breakdown: structuredResponse.breakdown || "",
-      status_message: structuredResponse.status_message || "Successfully processed by OpenAI",
+      recordId: workerData.recordId,
+      targetFieldId: workerData.targetFieldId,
+      mark: structuredResponse.mark,
+      feedback: structuredResponse.feedback,
+      breakdown: structuredResponse.breakdown
     };
 
     await axios.post(process.env.WEBHOOK_URL_MULTIPLE, payload);
-    console.log('Sent successfully to Airtable via webhook');
-    parentPort.postMessage({ status: 'success', recordId: recordId, data: payload });
-  } catch (error) {
-    console.error('Error in workerMultiple:', error.message);
 
-    // Always send payload with empty fields and an error message if retries fail
-    const errorPayload = {
-      recordId: workerData.recordId,
-      targetFieldId: workerData.targetFieldId,
-      mark: "", // Empty values for mark, feedback, and breakdown on error
-      feedback: "",
-      breakdown: "",
-      status_message: `Error: ${error.message}`,
-    };
+    parentPort.postMessage({ status: 'success', recordId: workerData.recordId });
+
+  } catch (error) {
+    console.error('Error in worker:', error.message);
 
     if (retries < MAX_RETRIES) {
-      console.log(`Retrying... Attempt ${retries + 1}`);
-      await processMultiple(retries + 1);
+      await processQuestion(retries + 1);
     } else {
-      await axios.post(process.env.WEBHOOK_URL_MULTIPLE, errorPayload);
-      console.log('Error sent to Airtable via webhook after retries');
       parentPort.postMessage({ status: 'error', error: error.message });
     }
   }
 }
 
 // Execute the worker task
-processMultiple();
+processQuestion();

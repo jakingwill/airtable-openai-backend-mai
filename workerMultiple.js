@@ -29,6 +29,13 @@ async function processQuestion(retries = 0) {
       throw new Error('Failed to generate feedback.');
     }
 
+    // Log the raw response from OpenAI for debugging
+    console.log('Raw API response from OpenAI for marking breakdown and feedback:', {
+      markBreakdown,
+      totalMark,
+      feedback
+    });
+
     // Prepare the payload for the webhook
     const payload = {
       recordId: workerData.recordId,

@@ -17,13 +17,13 @@ async function processQuestion(retries = 0) {
       throw new Error('Marking prompt or feedback prompt is missing or undefined.');
     }
 
-    // Step 1: Get Mark Breakdown and Total Mark using markingPrompt
+    // Step 1: Generate Mark Breakdown and Total Mark using markingPrompt
     const { markBreakdown, totalMark } = await generateMarkAndBreakdown(workerData.markingPrompt);
     if (!markBreakdown || !totalMark) {
       throw new Error('Failed to generate mark breakdown or total mark.');
     }
 
-    // Step 2: Get Student Feedback using feedbackPrompt
+    // Step 2: Generate Feedback using feedbackPrompt, markBreakdown, and totalMark
     const feedback = await generateFeedback(workerData.feedbackPrompt, markBreakdown, totalMark);
     if (!feedback) {
       throw new Error('Failed to generate feedback.');
@@ -73,30 +73,34 @@ async function generateMarkAndBreakdown(markingPrompt) {
       ],
       max_tokens: workerData.maxTokens,
       temperature: workerData.temperature,
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "marking_response",
+          strict: true,
+          schema: {
+            type: "object",
+            properties: {
+              mark: { type: "string" },
+              breakdown: { type: "string" },
+              feedback: { type: "string" }
+            },
+            required: ["mark", "breakdown", "feedback"],
+            additionalProperties: false
+          }
+        }
+      }
     });
 
-    // Extract both the breakdown and total mark from the response
-    const response = completion.choices[0].message.content;
-    const { breakdown, totalMark } = parseMarkAndBreakdown(response);
+    const generatedMessage = completion.choices[0].message;
+    const structuredResponse = JSON.parse(generatedMessage.content);
 
-    return { markBreakdown: breakdown, totalMark };
+    // Return structured breakdown and total mark
+    return { markBreakdown: structuredResponse.breakdown, totalMark: structuredResponse.mark };
   } catch (error) {
     console.error('Error generating mark breakdown and total mark:', error.message);
     return { markBreakdown: null, totalMark: null };
   }
-}
-
-// Parse the breakdown and total mark from the response
-function parseMarkAndBreakdown(response) {
-  // Logic to extract mark breakdown and total mark from the response
-  // Adjust this as per your model's output format
-  const breakdownMatch = response.match(/Mark Breakdown:\s*(.*?)(?=\n|$)/);
-  const totalMarkMatch = response.match(/Total Mark:\s*(\d+)/);
-
-  const breakdown = breakdownMatch ? breakdownMatch[1] : 'No breakdown available';
-  const totalMark = totalMarkMatch ? totalMarkMatch[1] : 'No total mark available';
-
-  return { breakdown, totalMark };
 }
 
 // Generate Feedback based on Mark Breakdown and Total Mark
@@ -106,7 +110,7 @@ async function generateFeedback(feedbackPrompt, markBreakdown, totalMark) {
       model: workerData.model,
       messages: [
         { role: 'system', content: 'You are a teacher providing feedback for a student based on the mark breakdown and total mark.' },
-        { role: 'user', content: `Given this mark breakdown: ${markBreakdown} and this total mark: ${totalMark}. ${feedbackPrompt} ` }
+        { role: 'user', content: `Given this mark breakdown: ${markBreakdown} and this total mark: ${totalMark}. ${feedbackPrompt}` }
       ],
       max_tokens: workerData.maxTokens,
       temperature: workerData.temperature,

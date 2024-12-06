@@ -13,16 +13,63 @@ async function processQuestion(retries = 0) {
   try {
     console.log('Processing question with workerData:', workerData);
 
-    if (!workerData.prompt) {
-      throw new Error('Prompt is missing or undefined.');
+    if (!workerData.markingPrompt || !workerData.feedbackPrompt) {
+      throw new Error('Marking prompt or feedback prompt is missing or undefined.');
     }
 
-    // Sending request to OpenAI
+    // Step 1: Generate Mark Breakdown and Total Mark using markingPrompt
+    const { markBreakdown, totalMark } = await generateMarkAndBreakdown(workerData.markingPrompt);
+    if (!markBreakdown || !totalMark) {
+      throw new Error('Failed to generate mark breakdown or total mark.');
+    }
+
+    // Step 2: Generate Feedback using feedbackPrompt, markBreakdown, and totalMark
+    const feedback = await generateFeedback(workerData.feedbackPrompt, markBreakdown, totalMark);
+    if (!feedback) {
+      throw new Error('Failed to generate feedback.');
+    }
+
+    // Log the raw response from OpenAI for debugging
+    console.log('Raw API response from OpenAI for marking breakdown and feedback:', {
+      markBreakdown,
+      totalMark,
+      feedback
+    });
+
+    // Prepare the payload for the webhook
+    const payload = {
+      recordId: workerData.recordId,
+      targetFieldId: workerData.targetFieldId,
+      mark: totalMark,
+      feedback,
+      breakdown: markBreakdown,
+    };
+
+    // Send the response to the webhook
+    await axios.post(process.env.WEBHOOK_URL_MULTIPLE, payload);
+
+    // Notify the main thread of success
+    parentPort.postMessage({ status: 'success', recordId: workerData.recordId });
+
+  } catch (error) {
+    console.error('Error in worker:', error.message);
+
+    if (retries < MAX_RETRIES) {
+      await processQuestion(retries + 1);
+    } else {
+      parentPort.postMessage({ status: 'error', error: error.message });
+    }
+  }
+}
+
+// Generate Mark Breakdown and Total Mark
+async function generateMarkAndBreakdown(markingPrompt) {
+  try {
     const completion = await openai.chat.completions.create({
       model: workerData.model,
       messages: [
-        { role: 'system', content: workerData.systemRole || 'You are a teacher providing a structured response.' },  
-        { role: 'user', content: workerData.prompt }
+        { role: 'system', content: 'You are a teacher providing a detailed mark breakdown and the total mark for an assessment.' },
+        { role: 'user', content: markingPrompt }
       ],
       max_tokens: workerData.maxTokens,
       temperature: workerData.temperature,
@@ -48,26 +95,31 @@ async function processQuestion(retries = 0) {
     const generatedMessage = completion.choices[0].message;
     const structuredResponse = JSON.parse(generatedMessage.content);
 
-    const payload = {
-      recordId: workerData.recordId,
-      targetFieldId: workerData.targetFieldId,
-      mark: structuredResponse.mark,
-      feedback: structuredResponse.feedback,
-      breakdown: structuredResponse.breakdown
-    };
-
-    await axios.post(process.env.WEBHOOK_URL_MULTIPLE, payload);
-
-    parentPort.postMessage({ status: 'success', recordId: workerData.recordId });
-
+    // Return structured breakdown and total mark
+    return { markBreakdown: structuredResponse.breakdown, totalMark: structuredResponse.mark };
   } catch (error) {
-    console.error('Error in worker:', error.message);
+    console.error('Error generating mark breakdown and total mark:', error.message);
+    return { markBreakdown: null, totalMark: null };
+  }
+}
 
-    if (retries < MAX_RETRIES) {
-      await processQuestion(retries + 1);
-    } else {
-      parentPort.postMessage({ status: 'error', error: error.message });
-    }
+// Generate Feedback based on Mark Breakdown and Total Mark
+async function generateFeedback(feedbackPrompt, markBreakdown, totalMark) {
+  try {
+    const completion = await openai.chat.completions.create({
+      model: workerData.model,
+      messages: [
+        { role: 'system', content: 'You are a teacher providing feedback for a student based on the mark breakdown and total mark.' },
+        { role: 'user', content: `Given this mark breakdown: ${markBreakdown} and this total mark: ${totalMark}. ${feedbackPrompt}` }
+      ],
+      max_tokens: workerData.maxTokens,
+      temperature: workerData.temperature,
+    });
+
+    return completion.choices[0].message.content;
+  } catch (error) {
+    console.error('Error generating feedback:', error.message);
+    return null;
   }
 }
 

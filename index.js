@@ -65,11 +65,18 @@ app.post('/generate/single', checkAPIKey, async (req, res) => {
 // Multiple response generation endpoint (mark, feedback, justification)
 app.post('/generate/multiple', checkAPIKey, async (req, res) => {
   try {
-    const { prompt, max_tokens, model, targetField_id, record_id, system_role, temperature } = req.body;
+    // Now, instead of a single prompt, we are expecting two prompts from the request body:
+    const { markingPrompt, feedbackPrompt, max_tokens, model, targetField_id, record_id, system_role, temperature } = req.body;
+
+    // Ensure both prompts are provided
+    if (!markingPrompt || !feedbackPrompt) {
+      return res.status(400).json({ error: 'Both markingPrompt and feedbackPrompt must be provided.' });
+    }
 
     // Call worker for generating multiple responses
     const result = await runWorker('./workerMultiple.js', {
-      prompt,
+      markingPrompt,
+      feedbackPrompt,
       maxTokens: max_tokens || 2000,
       model: model || 'gpt-4o',
       targetFieldId: targetField_id,
@@ -117,7 +124,6 @@ app.post('/generate/essaymg', checkAPIKey, async (req, res) => {
     res.status(500).json({ error: 'An error occurred while generating text.' });
   }
 });
-
 
 // Start the server
 const port = process.env.PORT || 5000;

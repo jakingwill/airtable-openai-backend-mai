@@ -106,11 +106,16 @@ async function generateMarkAndBreakdown(markingPrompt) {
 // Generate Feedback based on Mark Breakdown and Total Mark
 async function generateFeedback(feedbackPrompt, markBreakdown, totalMark) {
   try {
+    const userPrompt = `Given this mark breakdown: ${markBreakdown} and this total mark: ${totalMark}. ${feedbackPrompt}`;
+    
+    // Log the prompt
+    console.log('User prompt:', userPrompt);
+
     const completion = await openai.chat.completions.create({
       model: workerData.model,
       messages: [
         { role: 'system', content: 'You are a teacher providing feedback for a student based on the mark breakdown and total mark.' },
-        { role: 'user', content: `Given this mark breakdown: ${markBreakdown} and this total mark: ${totalMark}. ${feedbackPrompt}` }
+        { role: 'user', content: userPrompt }
       ],
       max_tokens: workerData.maxTokens,
       temperature: workerData.temperature,

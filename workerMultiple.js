@@ -106,7 +106,7 @@ async function generateMarkAndBreakdown(markingPrompt) {
 // Generate Feedback based on Mark Breakdown and Total Mark
 async function generateFeedback(feedbackPrompt, markBreakdown, totalMark) {
   try {
-    const userPrompt = `Given this mark breakdown: ${markBreakdown} and this total mark: ${totalMark}. ${feedbackPrompt}`;
+    const userPrompt = `The student got this total mark: ${totalMark}. The student got this mark breakdown: ${markBreakdown}. ${feedbackPrompt}`;
     
     // Log the prompt
     console.log('User prompt:', userPrompt);
